@@ -663,6 +663,8 @@ pub enum EscrowError {
     UnauthorizedWithdrawer = 185,
     /// Source and target escrows must use the same funding token for yield reinvestment.
     ReinvestFundingTokenMismatch = 186,
+    /// [`LiquifactEscrow::reinvest_yield`] rejected a target escrow that is the same as the source escrow.
+    ReinvestSelfTargetRejected = 187,
     /// A guardian-configured escrow requires admin proposal and guardian confirmation to activate a hold.
     LegalHoldRequiresGuardianConfirmation = 207,
     /// No legal-hold proposal is pending for guardian confirmation.
@@ -7100,6 +7102,13 @@ impl LiquifactEscrow {
         investor.require_auth();
         ensure(&env, amount > 0, EscrowError::ReinvestAmountNotPositive);
 
+        let source_id = env.current_contract_address();
+        ensure(
+            &env,
+            target_escrow != source_id,
+            EscrowError::ReinvestSelfTargetRejected,
+        );
+
         let source_escrow = Self::get_escrow(env.clone());
         ensure(
             &env,
@@ -7155,7 +7164,6 @@ impl LiquifactEscrow {
             .funded_amount
             .checked_add(amount)
             .unwrap_or_else(|| fail(&env, EscrowError::FundedAmountOverflow));
-        let source_id = env.current_contract_address();
         external_calls::transfer_funding_token_with_balance_checks(
             &env,
             &source_token,
